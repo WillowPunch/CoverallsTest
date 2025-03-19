@@ -1,38 +1,40 @@
-name: Build and Test
+on: ["push", "pull_request"]
 
-on:
-  push:
-    branches: [main, master]
-  pull_request:
-    branches: [main, master]
+name: Test Coveralls Parallel
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
-
+    strategy:
+      matrix:
+        test_number:
+          - 1
+          - 2
     steps:
-      - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+    - name: Use Node.js 16.x
+      uses: actions/setup-node@v3
+      with:
+        node-version: 16.x
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v3
-        with:
-          java-version: "17"
-          distribution: "temurin"
+    - name: npm install
+      run: npm install
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+    - name: Test ${{ matrix.test_number }}
+      run: make test-coverage-${{ matrix.test_number }}
+    - name: Coveralls Parallel
+      uses: coverallsapp/github-action@v2
+      with:
+        flag-name: run-${{ join(matrix.*, '-') }}
+        parallel: true
 
-      - name: Build with Gradle
-        run: ./gradlew build
-
-      - name: Run tests with coverage
-        run: ./gradlew test jacocoTestReport
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./build/reports/jacoco/test/jacocoTestReport.xml
-          flags: unittests
-          name: codecov-umbrella
-          fail_ci_if_error: true
+  finish:
+    needs: test
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: Coveralls Finished
+      uses: coverallsapp/github-action@v2
+      with:
+        parallel-finished: true
+        carryforward: "run-1,run-2"
